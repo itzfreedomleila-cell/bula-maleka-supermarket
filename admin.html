@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 2px solid var(--line); margin-bottom: 1.25rem; }
+        .tabs button { border: 0; background: none; padding: 0.6rem 1rem; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; }
+        .tabs button[aria-selected="true"] { color: var(--ocean); border-bottom-color: var(--ocean); }
+        .thumb { width: 3rem; height: 2.25rem; object-fit: cover; border-radius: 4px; background: var(--ocean-soft); }
+        tr.removed td { color: var(--muted); }
+        .inv { display: grid; grid-template-columns: 22rem 1fr; gap: 1.25rem; align-items: start; }
+        @media (max-width: 1000px) { .inv { grid-template-columns: 1fr; } }
+        .assign { display: flex; gap: 0.3rem; align-items: center; }
+        .assign select { width: auto; min-width: 9rem; padding: 0.3rem; }
+        .check { font-size: 0.85rem; margin-top: 0.35rem; }
+        .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: end; margin-bottom: 1rem; }
+        .toolbar .field { margin: 0; }
+        .stat { font-size: 1.6rem; font-weight: 800; }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <div class="tabs" role="tablist" aria-label="Staff sections">
+        <button role="tab" data-tab="inventory" aria-selected="true">Inventory</button>
+        <button role="tab" data-tab="orders" aria-selected="false">Orders &amp; refunds</button>
+        <button role="tab" data-tab="deliveries" aria-selected="false">Deliveries</button>
+        <button role="tab" data-tab="routes" aria-selected="false">Routes</button>
+        <button role="tab" data-tab="drivers" aria-selected="false">Drivers</button>
+        <button role="tab" data-tab="money" aria-selected="false">Money transfers</button>
+    </div>
+
+    <!-- ===================== Module 3: Inventory Management ===================== -->
+    <section id="tab-inventory" role="tabpanel">
+        <div class="inv">
+            <div>
+                <div class="panel">
+                    <h2 id="productFormHeading">Add a product</h2>
+                    <form id="productForm" novalidate>
+                        <input type="hidden" id="pId">
+                        <div class="field"><label for="pName">Name</label><input type="text" id="pName"></div>
+                        <div class="field"><label for="pCategory">Category</label><select id="pCategory"></select></div>
+                        <div class="two">
+                            <div class="field"><label for="pPrice">Price (FJ$)</label><input type="number" id="pPrice" min="0" step="0.01"></div>
+                            <div class="field"><label for="pStock">Stock</label><input type="number" id="pStock" min="0" step="1"></div>
+                        </div>
+                        <div class="field"><label for="pDescription">Description</label><textarea id="pDescription"></textarea></div>
+                        <div class="field"><label for="pImage">Photo link (optional)</label>
+                            <input type="text" id="pImage" placeholder="/images/products/... or https://..."></div>
+                        <div id="photoUpload" class="field" hidden>
+                            <label for="pPhoto">Or upload a photo (JPG, PNG or WEBP, max 2 MB)</label>
+                            <input type="file" id="pPhoto" accept="image/jpeg,image/png,image/webp">
+                        </div>
+                        <div style="display:flex;gap:0.5rem">
+                            <button type="submit" class="btn" id="productSubmit">Add product</button>
+                            <button type="button" class="btn outline" id="productCancel" hidden>Cancel edit</button>
+                        </div>
+                        <div id="productMsg" class="msg" role="status"></div>
+                    </form>
+                </div>
+                <div class="panel">
+                    <h2>Add a category</h2>
+                    <form id="categoryForm" novalidate>
+                        <div class="field"><label for="cName">Name</label><input type="text" id="cName"></div>
+                        <div class="field"><label for="cDescription">Description</label><input type="text" id="cDescription"></div>
+                        <button type="submit" class="btn">Add category</button>
+                        <div id="categoryMsg" class="msg" role="status"></div>
+                    </form>
+                </div>
+            </div>
+            <div class="panel">
+                <h2>Products</h2>
+                <div class="table-wrap"><table>
+                    <thead><tr><th></th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="productRows"></tbody>
+                </table></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================== Module 6 + 5: Orders and refunds ===================== -->
+    <section id="tab-orders" role="tabpanel" hidden>
+        <div class="panel">
+            <h2>Orders</h2>
+            <div class="table-wrap"><table>
+                <thead><tr><th>Order</th><th>Date</th><th>Customer</th><th>Total</th><th>Status</th><th>Payment</th><th></th></tr></thead>
+                <tbody id="orderRows"></tbody>
+            </table></div>
+        </div>
+    </section>
+
+    <!-- ===================== Module 9: Deliveries ===================== -->
+    <section id="tab-deliveries" role="tabpanel" hidden>
+        <div class="panel">
+            <div class="toolbar">
+                <div class="field"><label for="deliveryDate">Date</label><input type="date" id="deliveryDate"></div>
+                <button type="button" class="btn outline small" id="showUpcoming">Show all upcoming</button>
+            </div>
+            <div class="table-wrap"><table>
+                <thead><tr><th>When</th><th>Order</th><th>Customer &amp; address</th><th>Status</th><th>Driver &amp; ETA</th><th>Actions</th></tr></thead>
+                <tbody id="deliveryRows"></tbody>
+            </table></div>
+            <div id="deliveryMsg" class="msg" role="status"></div>
+        </div>
+    </section>
+
+    <!-- ===================== Module 9: Route Scheduling ===================== -->
+    <section id="tab-routes" role="tabpanel" hidden>
+        <div class="panel">
+            <div class="toolbar">
+                <div class="field"><label for="routeDriver">Driver</label><select id="routeDriver"></select></div>
+                <div class="field"><label for="routeDate">Date</label><input type="date" id="routeDate"></div>
+                <div class="field"><label for="routeSlot">Slot</label><select id="routeSlot">
+                    <option value="MORNING">9:00 - 11:00</option><option value="MIDDAY">11:00 - 13:00</option>
+                    <option value="AFTERNOON">13:00 - 15:00</option><option value="LATE_AFTERNOON">15:00 - 17:00</option>
+                    <option value="EVENING">17:00 - 19:00</option></select></div>
+                <button type="button" class="btn" id="routeBtn">Show route</button>
+            </div>
+            <div id="routeResult" class="empty">Choose a driver, date and slot.</div>
+        </div>
+    </section>
+
+    <!-- ===================== Drivers ===================== -->
+    <section id="tab-drivers" role="tabpanel" hidden>
+        <div class="inv">
+            <div class="panel">
+                <h2>Add a driver</h2>
+                <form id="driverForm" novalidate>
+                    <div class="field"><label for="dName">Name</label><input type="text" id="dName"></div>
+                    <div class="field"><label for="dPhone">Phone (7 digits)</label><input type="tel" id="dPhone"></div>
+                    <div class="field"><label for="dVehicle">Vehicle</label><input type="text" id="dVehicle"></div>
+                    <button type="submit" class="btn">Add driver</button>
+                    <div id="driverMsg" class="msg" role="status"></div>
+                </form>
+            </div>
+            <div class="panel">
+                <h2>Drivers</h2>
+                <div class="table-wrap"><table>
+                    <thead><tr><th>Name</th><th>Phone</th><th>Vehicle</th><th>Upcoming</th><th>Status</th><th></th></tr></thead>
+                    <tbody id="driverRows"></tbody>
+                </table></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===================== Module 5: Money Transfer ===================== -->
+    <section id="tab-money" role="tabpanel" hidden>
+        <div class="panel">
+            <div class="muted">Store account <span id="storeAccount"></span></div>
+            <div class="stat num">FJ$<span id="storeBalance">0.00</span></div>
+            <div class="table-wrap" style="margin-top:1rem"><table>
+                <thead><tr><th>When</th><th>Type</th><th>Payment</th><th>From</th><th>To</th><th>Amount</th></tr></thead>
+                <tbody id="ledgerRows"></tbody>
+            </table></div>
+        </div>
+    </section>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+    const { $, api, esc, money } = App;
+    let categories = [];
+    let products = [];
+    let drivers = [];
+
+    function localIso(offset = 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    // ---------- Tabs ----------
+    const loaders = { inventory: loadInventory, orders: loadOrders, deliveries: loadDeliveries, routes: loadRouteOptions,
+                      drivers: loadDrivers, money: loadLedger };
+    document.querySelectorAll('[role="tab"]').forEach((tab) => tab.onclick = () => {
+        document.querySelectorAll('[role="tab"]').forEach((t) => t.setAttribute("aria-selected", t === tab));
+        document.querySelectorAll('[role="tabpanel"]').forEach((p) => p.hidden = p.id !== "tab-" + tab.dataset.tab);
+        loaders[tab.dataset.tab]();
+    });
+
+    // ================= Inventory (Module 3) =================
+    async function loadInventory() {
+        categories = await api("GET", "/api/catalog/categories");
+        $("pCategory").innerHTML = categories.map((c) => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+        products = await api("GET", "/api/admin/inventory/products");
+        $("productRows").innerHTML = products.map((p) => `
+            <tr class="${p.active ? "" : "removed"}">
+                <td><img class="thumb" src="${esc(p.imageUrl || "")}" alt=""></td>
+                <td><strong>${esc(p.name)}</strong></td>
+                <td>${esc(p.categoryName)}</td>
+                <td class="num">FJ$${money(p.price)}</td>
+                <td class="num ${p.stockQuantity <= 5 ? "" : ""}">${p.stockQuantity}${p.stockQuantity <= 5 ? ' <span class="pill bad">Low</span>' : ""}</td>
+                <td><span class="${p.active ? "pill good" : "pill bad"}">${p.active ? "On sale" : "Removed"}</span></td>
+                <td><div class="actions">
+                    <button type="button" class="btn outline small" onclick="editProduct(${p.id})">Edit</button>
+                    ${p.active ? `<button type="button" class="btn danger small" onclick="removeProduct(${p.id})">Remove</button>`
+                               : `<button type="button" class="btn small" onclick="restoreProduct(${p.id})">Restore</button>`}
+                </div></td>
+            </tr>`).join("");
+    }
+
+    function resetProductForm() {
+        $("productForm").reset();
+        $("pId").value = "";
+        $("productFormHeading").textContent = "Add a product";
+        $("productSubmit").textContent = "Add product";
+        $("productCancel").hidden = true;
+        $("photoUpload").hidden = true;
+    }
+
+    /** Product Info Edit: fills the form with the product's details. */
+    function editProduct(id) {
+        const p = products.find((x) => x.id === id);
+        $("pId").value = p.id;
+        $("pName").value = p.name;
+        $("pCategory").value = p.categoryId;
+        $("pPrice").value = p.price;
+        $("pStock").value = p.stockQuantity;
+        $("pDescription").value = p.description || "";
+        $("pImage").value = p.imageUrl || "";
+        $("productFormHeading").textContent = "Edit " + p.name;
+        $("productSubmit").textContent = "Save changes";
+        $("productCancel").hidden = false;
+        $("photoUpload").hidden = false;
+        App.clear("productMsg");
+        $("productForm").scrollIntoView({ behavior: "smooth" });
+    }
+    $("productCancel").onclick = resetProductForm;
+
+    /** Product Addition or Product Info Edit (plus optional photo upload). */
+    $("productForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const id = $("pId").value;
+        const body = {
+            name: $("pName").value, categoryId: Number($("pCategory").value) || null,
+            price: $("pPrice").value === "" ? null : Number($("pPrice").value),
+            stockQuantity: $("pStock").value === "" ? null : Number($("pStock").value),
+            description: $("pDescription").value, imageUrl: $("pImage").value
+        };
+        try {
+            const saved = id ? await api("PUT", "/api/admin/inventory/products/" + id, body)
+                             : await api("POST", "/api/admin/inventory/products", body);
+            const file = $("pPhoto").files[0];
+            if (id && file) {
+                const form = new FormData();
+                form.append("photo", file);
+                await api("POST", `/api/admin/inventory/products/${id}/photo`, form);
+            }
+            resetProductForm();
+            App.show("productMsg", "ok", `${saved.name} ${id ? "updated" : "added"}.`);
+            await loadInventory();
+        } catch (err) { App.show("productMsg", "error", err.message, err.list); }
+    };
+
+    /** Product Removal. */
+    async function removeProduct(id) {
+        const p = products.find((x) => x.id === id);
+        if (!confirm(`Remove "${p.name}" from the shop? It stays in past orders and can be restored.`)) return;
+        try { await api("DELETE", "/api/admin/inventory/products/" + id); await loadInventory(); }
+        catch (e) { App.show("productMsg", "error", e.message); }
+    }
+
+    async function restoreProduct(id) {
+        try { await api("POST", `/api/admin/inventory/products/${id}/restore`); await loadInventory(); }
+        catch (e) { App.show("productMsg", "error", e.message); }
+    }
+
+    $("categoryForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const c = await api("POST", "/api/admin/inventory/categories", { name: $("cName").value, description: $("cDescription").value });
+            $("categoryForm").reset();
+            App.show("categoryMsg", "ok", c.name + " added.");
+            await loadInventory();
+        } catch (err) { App.show("categoryMsg", "error", err.message, err.list); }
+    };
+
+    // ================= Orders and refunds (Modules 6 and 5) =================
+    async function loadOrders() {
+        const orders = await api("GET", "/api/admin/orders");
+        $("orderRows").innerHTML = orders.length === 0 ? '<tr><td colspan="7" class="empty">No orders yet.</td></tr>' : orders.map((o) => `
+            <tr>
+                <td><strong>${esc(o.orderNumber)}</strong><br><span class="small muted">${o.items.length} item line(s)</span></td>
+                <td>${App.when(o.createdAt)}</td>
+                <td>${esc(o.customerName)}</td>
+                <td class="num">FJ$${money(o.total)}${Number(o.refundedAmount) > 0 ? `<br><span class="small muted">−FJ$${money(o.refundedAmount)} refunded</span>` : ""}</td>
+                <td><span class="${App.pillClass(o.status)}">${App.label(o.status)}</span></td>
+                <td class="small">${esc(o.paymentMethod)}<br>${esc(o.paymentReference)}</td>
+                <td>
+                    <div class="actions">
+                        <a class="btn outline small" href="receipt.html?order=${encodeURIComponent(o.orderNumber)}">Receipt</a>
+                        <button type="button" class="btn outline small" onclick="trackPayment('${esc(o.paymentReference)}', this)">Track payment</button>
+                        ${o.status !== "REFUNDED" ? `<button type="button" class="btn danger small" onclick="toggle('rf-${esc(o.orderNumber)}')">Refund</button>` : ""}
+                    </div>
+                    <div id="rf-${esc(o.orderNumber)}" hidden style="margin-top:0.4rem">
+                        <div class="two"><input type="number" step="0.01" min="0.01" placeholder="Amount (blank = all)" aria-label="Refund amount">
+                            <input type="text" placeholder="Reason" aria-label="Refund reason"></div>
+                        <button type="button" class="btn small" style="margin-top:0.3rem" onclick="refund('${esc(o.paymentReference)}', 'rf-${esc(o.orderNumber)}')">Confirm refund</button>
+                        <div class="msg" role="status"></div>
+                    </div>
+                    <div class="track"></div>
+                </td>
+            </tr>`).join("");
+    }
+
+    function toggle(id) { $(id).hidden = !$(id).hidden; }
+
+    /** Transaction Status Tracking. */
+    async function trackPayment(reference, button) {
+        const box = button.closest("td").querySelector(".track");
+        if (box.innerHTML) { box.innerHTML = ""; return; }
+        try {
+            const tx = await api("GET", "/api/admin/payments/" + encodeURIComponent(reference));
+            box.innerHTML = `<ol class="timeline">${tx.events.map((e) => `<li><strong>${App.label(e.status)}</strong> ${esc(e.message)}<time>${App.when(e.at)}</time></li>`).join("")}</ol>`;
+        } catch (e) { box.textContent = e.message; }
+    }
+
+    /** Refund Processing. */
+    async function refund(reference, boxId) {
+        const box = $(boxId);
+        const [amount, reason] = box.querySelectorAll("input");
+        try {
+            await api("POST", `/api/admin/payments/${encodeURIComponent(reference)}/refund`,
+                { amount: amount.value ? Number(amount.value) : null, reason: reason.value });
+            await loadOrders();
+        } catch (e) { App.show(box.querySelector(".msg"), "error", e.message); }
+    }
+
+    // ================= Deliveries (Module 9) =================
+    async function loadDeliveries(date) {
+        drivers = await api("GET", "/api/admin/delivery/drivers");
+        const list = await api("GET", "/api/admin/delivery/deliveries" + (date ? "?date=" + date : ""));
+        const activeDrivers = drivers.filter((d) => d.active);
+        $("deliveryRows").innerHTML = list.length === 0 ? '<tr><td colspan="6" class="empty">No deliveries booked.</td></tr>' : list.map((d) => `
+            <tr>
+                <td><strong>${App.day(d.date)}</strong><br>${esc(d.slotLabel)}</td>
+                <td>${esc(d.orderNumber)}</td>
+                <td>${esc(d.customerName)}<br><span class="small">${esc(d.address)}, ${esc(d.areaName)} · ${esc(d.contactPhone)}</span></td>
+                <td><span class="${App.pillClass(d.status)}">${App.label(d.status)}</span>
+                    ${d.cancelReason ? `<br><span class="small muted">${esc(d.cancelReason)}</span>` : ""}</td>
+                <td>${d.driverName ? esc(d.driverName) + (d.routeSequence ? ` <span class="small muted">(stop ${d.routeSequence})</span>` : "") : '<span class="muted">No driver</span>'}
+                    ${["SCHEDULED", "ASSIGNED", "CONFIRMED"].includes(d.status) ? `<br><span class="small">ETA ${App.time(d.estimatedArrival)}</span>` : ""}</td>
+                <td>${deliveryActions(d, activeDrivers)}<div class="check" id="chk-${d.id}"></div></td>
+            </tr>`).join("");
+    }
+
+    function deliveryActions(d, activeDrivers) {
+        if (d.status === "SCHEDULED") {
+            return `<div class="assign">
+                    <select id="drv-${d.id}" aria-label="Driver">${activeDrivers.map((x) => `<option value="${x.id}">${esc(x.name)}</option>`).join("")}</select>
+                    <button type="button" class="btn outline small" onclick="checkConflicts(${d.id})">Check</button>
+                    <button type="button" class="btn small" onclick="assign(${d.id})">Assign</button></div>
+                <div class="actions" style="margin-top:0.3rem"><button type="button" class="link danger" onclick="cancelDelivery(${d.id})">Cancel</button></div>`;
+        }
+        if (d.status === "ASSIGNED") {
+            return `<div class="actions">
+                <button type="button" class="btn small" onclick="deliveryAction(${d.id}, 'confirm')">Confirm schedule</button>
+                <button type="button" class="btn outline small" onclick="deliveryAction(${d.id}, 'remove-driver')">Remove driver</button>
+                <button type="button" class="link danger" onclick="cancelDelivery(${d.id})">Cancel</button></div>`;
+        }
+        if (d.status === "CONFIRMED") {
+            return `<div class="actions">
+                <button type="button" class="btn small" onclick="deliveryAction(${d.id}, 'delivered')">Mark delivered</button>
+                <button type="button" class="btn outline small" onclick="deliveryAction(${d.id}, 'remove-driver')">Remove driver</button>
+                <button type="button" class="link danger" onclick="cancelDelivery(${d.id})">Cancel</button></div>`;
+        }
+        return "";
+    }
+
+    function currentDeliveryDate() { return $("deliveryDate").value || null; }
+
+    /** Delivery Conflict Detection: preview before assigning. */
+    async function checkConflicts(id) {
+        const driverId = $("drv-" + id).value;
+        try {
+            const r = await api("GET", `/api/admin/delivery/deliveries/${id}/conflicts?driverId=${driverId}`);
+            const route = r.projectedRoute;
+            $("chk-" + id).innerHTML = r.ok
+                ? `<span class="pill good">No conflicts</span> Route: ${route.stops.length} stop(s), ${route.totalKm} km,
+                   ends ${App.time(route.finishTime)}`
+                : `<span class="pill bad">Conflict</span><ul style="margin:0.2rem 0 0;padding-left:1.1rem">${r.conflicts.map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`;
+        } catch (e) { $("chk-" + id).textContent = e.message; }
+    }
+
+    /** Driver Assignment. */
+    async function assign(id) {
+        try {
+            await api("POST", `/api/admin/delivery/deliveries/${id}/assign`, { driverId: Number($("drv-" + id).value) });
+            App.clear("deliveryMsg");
+            await loadDeliveries(currentDeliveryDate());
+        } catch (e) {
+            $("chk-" + id).innerHTML = `<span class="pill bad">Not assigned</span><ul style="margin:0.2rem 0 0;padding-left:1.1rem">${(e.list.length ? e.list : [e.message]).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>`;
+        }
+    }
+
+    /** Confirm schedule, Remove appointed driver, or Mark delivered. */
+    async function deliveryAction(id, action) {
+        try {
+            await api("POST", `/api/admin/delivery/deliveries/${id}/${action}`);
+            await loadDeliveries(currentDeliveryDate());
+        } catch (e) { App.show("deliveryMsg", "error", e.message); }
+    }
+
+    /** Cancel Schedule. */
+    async function cancelDelivery(id) {
+        const reason = prompt("Reason for cancelling this delivery?", "Cancelled by store");
+        if (reason === null) return;
+        try {
+            await api("POST", `/api/admin/delivery/deliveries/${id}/cancel`, { reason });
+            await loadDeliveries(currentDeliveryDate());
+        } catch (e) { App.show("deliveryMsg", "error", e.message); }
+    }
+
+    $("deliveryDate").onchange = () => loadDeliveries(currentDeliveryDate());
+    $("showUpcoming").onclick = () => { $("deliveryDate").value = ""; loadDeliveries(null); };
+
+    // ================= Route Scheduling (Module 9) =================
+    async function loadRouteOptions() {
+        drivers = await api("GET", "/api/admin/delivery/drivers");
+        $("routeDriver").innerHTML = drivers.map((d) => `<option value="${d.id}">${esc(d.name)}${d.active ? "" : " (unavailable)"}</option>`).join("");
+        if (!$("routeDate").value) $("routeDate").value = localIso(1);
+    }
+
+    $("routeBtn").onclick = async () => {
+        try {
+            const r = await api("GET", `/api/admin/delivery/routes?driverId=${$("routeDriver").value}&date=${$("routeDate").value}&slot=${$("routeSlot").value}`);
+            $("routeResult").className = "";
+            $("routeResult").innerHTML = r.stops.length === 0
+                ? `<p class="empty">${esc(r.driverName)} has no deliveries in this slot.</p>`
+                : `<p><strong>${esc(r.driverName)}</strong>, ${App.day(r.date)} ${esc(r.slotLabel)}:
+                      ${r.stops.length} stop(s), ${r.totalKm} km, back on the road by ${App.time(r.finishTime)}
+                      <span class="${r.fitsInSlot ? "pill good" : "pill bad"}">${r.fitsInSlot ? "Fits in slot" : "Runs over slot"}</span></p>
+                   <div class="table-wrap"><table>
+                     <thead><tr><th>Stop</th><th>Order</th><th>Address</th><th>Drive</th><th>Estimated arrival</th></tr></thead>
+                     <tbody><tr><td>Start</td><td colspan="3" class="muted">Leave the store</td><td>${esc(r.slotLabel.split(" - ")[0])}</td></tr>
+                     ${r.stops.map((s) => `<tr><td>${s.sequence}</td><td>${esc(s.orderNumber)}</td>
+                        <td>${esc(s.address)}, ${esc(s.areaName)}</td><td class="num">${s.legKm} km · ${s.legMinutes} min</td>
+                        <td><strong>${App.time(s.eta)}</strong></td></tr>`).join("")}</tbody></table></div>`;
+        } catch (e) { $("routeResult").textContent = e.message; }
+    };
+
+    // ================= Drivers =================
+    async function loadDrivers() {
+        drivers = await api("GET", "/api/admin/delivery/drivers");
+        $("driverRows").innerHTML = drivers.map((d) => `
+            <tr>
+                <td><strong>${esc(d.name)}</strong></td><td>${esc(d.phone)}</td><td>${esc(d.vehicle || "")}</td>
+                <td class="num">${d.upcomingDeliveries}</td>
+                <td><span class="${d.active ? "pill good" : "pill bad"}">${d.active ? "Available" : "Unavailable"}</span></td>
+                <td>${d.active
+                    ? `<button type="button" class="btn danger small" onclick="setDriver(${d.id}, false)">Make unavailable</button>`
+                    : `<button type="button" class="btn small" onclick="setDriver(${d.id}, true)">Make available</button>`}</td>
+            </tr>`).join("");
+    }
+
+    async function setDriver(id, active) {
+        if (!active && !confirm("This removes the driver from all upcoming deliveries so they can be reassigned. Continue?")) return;
+        try { await api("POST", `/api/admin/delivery/drivers/${id}/active?value=${active}`); await loadDrivers(); }
+        catch (e) { App.show("driverMsg", "error", e.message); }
+    }
+
+    $("driverForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const d = await api("POST", "/api/admin/delivery/drivers", { name: $("dName").value, phone: $("dPhone").value, vehicle: $("dVehicle").value });
+            $("driverForm").reset();
+            App.show("driverMsg", "ok", d.name + " added.");
+            await loadDrivers();
+        } catch (err) { App.show("driverMsg", "error", err.message, err.list); }
+    };
+
+    // ================= Money Transfer (Module 5) =================
+    async function loadLedger() {
+        const ledger = await api("GET", "/api/admin/payments/ledger");
+        $("storeAccount").textContent = ledger.storeAccount;
+        $("storeBalance").textContent = money(ledger.storeBalance);
+        $("ledgerRows").innerHTML = ledger.entries.length === 0 ? '<tr><td colspan="6" class="empty">No transfers yet.</td></tr>' : ledger.entries.map((e) => `
+            <tr><td>${App.when(e.createdAt)}</td>
+                <td><span class="${e.type === "PAYMENT" ? "pill good" : "pill warn"}">${App.label(e.type)}</span></td>
+                <td>${esc(e.transactionReference)}</td><td>${esc(e.fromAccount)}</td><td>${esc(e.toAccount)}</td>
+                <td class="num">${e.type === "PAYMENT" ? "+" : "−"}FJ$${money(e.amount)}</td></tr>`).join("");
+    }
+
+    (async () => {
+        await App.loadUser();
+        if (!App.requireLogin()) return;
+        App.renderHeader("admin");
+        if (App.user.role !== "ADMIN") {
+            document.querySelector("main").innerHTML = '<div class="panel"><h2>Staff only</h2><p>This page is for store staff.</p></div>';
+            return;
+        }
+        await loadInventory();
+    })();
+</script>
+</body>
+</html>

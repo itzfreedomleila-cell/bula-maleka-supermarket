@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Checkout - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        h2 .step { display: inline-grid; place-items: center; width: 1.7rem; height: 1.7rem; border-radius: 50%; background: var(--ocean); color: var(--paper); font-size: 0.95rem; margin-right: 0.4rem; }
+        .method { display: flex; align-items: center; gap: 0.75rem; padding: 0.7rem 0.8rem; border: 2px solid var(--line); border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer; }
+        .method:has(input:checked) { border-color: var(--ocean); background: var(--ocean-soft); }
+        .method .grow { flex: 1; }
+        .confirm-box { border: 2px solid var(--leaf); border-radius: 8px; padding: 1rem; margin-top: 1rem; }
+        .confirm-box.failed { border-color: var(--error); }
+        .confirm-box h3 { margin: 0 0 0.25rem; }
+        .ref { font-size: 1.35rem; font-weight: 800; letter-spacing: 0.03em; }
+        .tx { padding: 0.7rem 0; }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <details class="notice">
+        <summary>Payment simulation for coursework: no real money moves. Show test details</summary>
+        <ul>
+            <li>Approved: Visa 4242 4242 4242 4242 or Mastercard 5555 5555 5555 4444</li>
+            <li>Declined: 4000 0000 0000 0002. Any future expiry (e.g. 08/28) and any 3-digit CVV.</li>
+            <li>M-PAiSA / MyCash: any 7-digit number. A number ending in 0000 has insufficient balance.</li>
+        </ul>
+    </details>
+
+    <div class="grid-2">
+        <div>
+            <section class="panel" aria-labelledby="orderHeading">
+                <h2 id="orderHeading"><span class="step">1</span>Your order</h2>
+                <div id="orderLines" class="divided">Loading…</div>
+            </section>
+
+            <section class="panel" aria-labelledby="methodHeading">
+                <h2 id="methodHeading"><span class="step">2</span>Choose how to pay</h2>
+                <div id="methodList" role="radiogroup" aria-labelledby="methodHeading"></div>
+                <details id="addMethod">
+                    <summary class="link">Add a payment method</summary>
+                    <form id="methodForm" novalidate style="margin-top:0.75rem">
+                        <div id="typeChoices" class="chips" role="group" aria-label="Payment method type" style="margin-bottom:0.75rem"></div>
+                        <div class="field"><label for="holderName">Name on card or wallet</label>
+                            <input type="text" id="holderName" autocomplete="cc-name"></div>
+                        <div id="cardFields">
+                            <div class="field"><label for="cardNumber">Card number</label>
+                                <input type="text" id="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="4242 4242 4242 4242"></div>
+                            <div class="field"><label for="expiry">Expiry (MM/YY)</label>
+                                <input type="text" id="expiry" autocomplete="cc-exp" placeholder="08/28" style="max-width:8rem"></div>
+                        </div>
+                        <div id="walletFields" hidden>
+                            <div class="field"><label for="mobileNumber">Wallet mobile number (7 digits)</label>
+                                <input type="tel" id="mobileNumber" placeholder="912 3456"></div>
+                        </div>
+                        <button type="submit" class="btn">Save payment method</button>
+                        <div id="methodMsg" class="msg" role="status"></div>
+                    </form>
+                </details>
+            </section>
+
+            <section class="panel" aria-labelledby="payHeading">
+                <h2 id="payHeading"><span class="step">3</span>Review and pay</h2>
+                <div id="breakdown" class="muted">Choose a payment method to see the total.</div>
+                <div id="cvvField" class="field" hidden style="margin-top:0.75rem">
+                    <label for="cvv">Card security code (CVV)</label>
+                    <input type="password" id="cvv" inputmode="numeric" maxlength="3" autocomplete="cc-csc" style="max-width:8rem">
+                </div>
+                <button id="payBtn" class="btn wide" style="margin-top:0.75rem" disabled>Pay</button>
+                <div id="payMsg" class="msg" role="status" aria-live="polite"></div>
+                <div id="confirmation"></div>
+            </section>
+        </div>
+
+        <aside class="panel" aria-labelledby="historyHeading">
+            <h2 id="historyHeading">My payments</h2>
+            <div id="history" class="divided empty">No payments yet.</div>
+        </aside>
+    </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+    const { $, api, esc, money } = App;
+    let methodTypes = [];
+    let savedMethods = [];
+    let selectedMethodId = null;
+    let newMethodType = "CARD";
+    let paymentKey = App.newKey();   // unique id for the next payment attempt
+    let lastRequest = null;          // kept to demonstrate duplicate prevention
+
+    // ===== Order summary (Module 4 cart) =====
+    async function loadOrder() {
+        const cart = await api("GET", "/api/cart");
+        $("orderLines").innerHTML = cart.items.length === 0
+            ? '<p class="empty">Your cart is empty. <a href="cart.html">Go shopping</a></p>'
+            : cart.items.map((i) => `<div class="row"><span>${i.quantity} × ${esc(i.productName)}</span>
+                <span class="num">FJ$${money(i.subtotal)}</span></div>`).join("")
+              + `<div class="row"><strong>Subtotal</strong><strong class="num">FJ$${money(cart.total)}</strong></div>`;
+    }
+
+    // ===== Payment Registration and Method Selection =====
+    function renderTypeChoices() {
+        $("typeChoices").innerHTML = methodTypes.map((t) =>
+            `<button type="button" class="chip" aria-pressed="${t.code === newMethodType}" data-code="${t.code}">${esc(t.displayName)}</button>`).join("");
+        document.querySelectorAll("#typeChoices .chip").forEach((b) => b.onclick = () => {
+            newMethodType = b.dataset.code;
+            const isCard = methodTypes.find((t) => t.code === newMethodType).card;
+            $("cardFields").hidden = !isCard;
+            $("walletFields").hidden = isCard;
+            renderTypeChoices();
+        });
+    }
+
+    async function loadMethods() {
+        savedMethods = await api("GET", "/api/payments/methods");
+        if (!savedMethods.some((m) => m.id === selectedMethodId)) {
+            selectedMethodId = savedMethods.length ? savedMethods[0].id : null;
+        }
+        $("addMethod").open = savedMethods.length === 0;
+        $("methodList").innerHTML = savedMethods.length === 0
+            ? '<p class="empty">No saved payment methods yet. Add one below.</p>'
+            : savedMethods.map((m) => `
+                <label class="method">
+                    <input type="radio" name="method" value="${m.id}" ${m.id === selectedMethodId ? "checked" : ""}>
+                    <span class="grow"><strong>${esc(m.label)}</strong><br>
+                        <span class="muted small">${esc(m.holderName)}${m.expiry ? " · expires " + esc(m.expiry) : ""}</span></span>
+                    <button type="button" class="link danger" onclick="removeMethod(event, ${m.id})">Remove</button>
+                </label>`).join("");
+        document.querySelectorAll('input[name="method"]').forEach((r) => r.onchange = () => {
+            selectedMethodId = Number(r.value);
+            refreshQuote();
+        });
+        refreshQuote();
+    }
+
+    $("methodForm").onsubmit = async (event) => {
+        event.preventDefault();
+        const isCard = methodTypes.find((t) => t.code === newMethodType).card;
+        try {
+            const saved = await api("POST", "/api/payments/methods", {
+                type: newMethodType, holderName: $("holderName").value,
+                cardNumber: isCard ? $("cardNumber").value : null, expiry: isCard ? $("expiry").value : null,
+                mobileNumber: isCard ? null : $("mobileNumber").value
+            });
+            selectedMethodId = saved.id;
+            $("methodForm").reset();
+            App.show("methodMsg", "ok", saved.label + " saved.");
+            await loadMethods();
+        } catch (e) { App.show("methodMsg", "error", e.message, e.list); }
+    };
+
+    async function removeMethod(event, id) {
+        event.preventDefault();
+        try { await api("DELETE", "/api/payments/methods/" + id); await loadMethods(); }
+        catch (e) { App.show("methodMsg", "error", e.message); }
+    }
+
+    // ===== Payment Amount Calculation =====
+    async function refreshQuote() {
+        const method = savedMethods.find((m) => m.id === selectedMethodId);
+        $("cvvField").hidden = !(method && method.requiresCvv);
+        if (!method) {
+            $("breakdown").className = "muted";
+            $("breakdown").textContent = "Choose a payment method to see the total.";
+            $("payBtn").disabled = true;
+            $("payBtn").textContent = "Pay";
+            return;
+        }
+        try {
+            const q = await api("GET", "/api/payments/quote?methodId=" + method.id);
+            $("breakdown").className = "";
+            $("breakdown").innerHTML = `
+                <div class="row"><span>Subtotal</span><span class="num">FJ$${money(q.subtotal)}</span></div>
+                <div class="row"><span>Delivery</span><span class="num">${Number(q.deliveryFee) === 0 ? "Free" : "FJ$" + money(q.deliveryFee)}</span></div>
+                ${Number(q.surcharge) > 0 ? `<div class="row"><span>Card fee</span><span class="num">FJ$${money(q.surcharge)}</span></div>` : ""}
+                <div class="row total"><span>To pay</span><span class="num">FJ$${money(q.total)}</span></div>
+                ${Number(q.deliveryFee) > 0 ? `<div class="muted small">Free delivery on orders of FJ$${money(q.freeDeliveryThreshold)} or more.</div>` : ""}`;
+            $("payBtn").textContent = `Pay FJ$${money(q.total)} with ${method.label}`;
+            $("payBtn").disabled = Number(q.subtotal) === 0;
+        } catch (e) {
+            $("breakdown").textContent = e.message;
+            $("payBtn").disabled = true;
+        }
+    }
+
+    // ===== Transaction Processing, Confirmation, Duplicate Prevention =====
+    async function sendPayment(request) {
+        $("payBtn").disabled = true;
+        try {
+            const tx = await api("POST", "/api/payments/pay", request);
+            if (tx.status === "SUCCESS" || tx.duplicate) {
+                App.show("payMsg", "ok", tx.message);
+                await showOrderConfirmation(tx);
+            } else {
+                App.show("payMsg", "error", tx.message);
+                $("confirmation").innerHTML = `<div class="confirm-box failed"><h3>Payment not completed</h3>
+                    <div class="muted">Reference ${esc(tx.reference)}. Your cart has been kept, so you can try another method.</div></div>`;
+            }
+        } catch (e) {
+            App.show("payMsg", "error", e.message, e.list);   // Payment Error Handling
+        }
+        await Promise.all([loadOrder(), loadHistory()]);
+        refreshQuote();
+    }
+
+    $("payBtn").onclick = async () => {
+        lastRequest = { paymentMethodId: selectedMethodId, cvv: $("cvv").value, idempotencyKey: paymentKey };
+        paymentKey = App.newKey();
+        $("cvv").value = "";
+        await sendPayment(lastRequest);
+    };
+
+    /** Module 6: the order created and confirmed from this payment. */
+    async function showOrderConfirmation(tx) {
+        try {
+            const order = await api("GET", "/api/orders/by-payment/" + encodeURIComponent(tx.reference));
+            $("confirmation").innerHTML = `
+                <div class="confirm-box">
+                    <h3>Order confirmed</h3>
+                    <div class="muted">Order number</div>
+                    <div class="ref">${esc(order.orderNumber)}</div>
+                    <p>${esc(order.confirmationMessage)}</p>
+                    ${order.items.map((i) => `<div class="row"><span>${i.quantity} × ${esc(i.productName)}</span><span class="num">FJ$${money(i.subtotal)}</span></div>`).join("")}
+                    <div class="row total"><span>Paid</span><span class="num">FJ$${money(order.total)}</span></div>
+                    <p style="display:flex;gap:0.5rem;flex-wrap:wrap">
+                        <a class="btn" href="account.html?book=${encodeURIComponent(order.orderNumber)}">Book delivery</a>
+                        <a class="btn outline" href="receipt.html?order=${encodeURIComponent(order.orderNumber)}">View receipt</a>
+                    </p>
+                    ${lastRequest ? `<p class="small"><button type="button" class="link" onclick="sendPayment(lastRequest)">Send the same payment again</button>
+                        <span class="muted">(demonstrates duplicate payment prevention)</span></p>` : ""}
+                </div>`;
+        } catch (e) { $("confirmation").innerHTML = ""; }
+    }
+
+    // ===== Transaction History and Status Tracking =====
+    async function loadHistory() {
+        const list = await api("GET", "/api/payments/transactions");
+        $("history").className = list.length ? "divided" : "divided empty";
+        $("history").innerHTML = list.length === 0 ? "No payments yet." : list.map((tx) => `
+            <div class="tx">
+                <div class="row" style="padding:0"><strong>${esc(tx.reference)}</strong><span class="${App.pillClass(tx.status)}">${App.label(tx.status)}</span></div>
+                <div class="row" style="padding:0"><span class="muted small">${App.when(tx.createdAt)} · ${esc(tx.methodLabel)}</span>
+                    <span class="num">FJ$${money(tx.totalAmount)}</span></div>
+                ${Number(tx.refundedAmount) > 0 ? `<div class="muted small">Refunded FJ$${money(tx.refundedAmount)}</div>` : ""}
+                <details><summary class="link">Track status</summary>
+                    <ol class="timeline">${tx.events.map((e) => `<li><strong>${App.label(e.status)}</strong> ${esc(e.message)}<time>${App.when(e.at)}</time></li>`).join("")}</ol>
+                </details>
+            </div>`).join("");
+    }
+
+    (async () => {
+        await App.loadUser();
+        if (!App.requireLogin()) return;
+        App.renderHeader("checkout");
+        try {
+            methodTypes = await api("GET", "/api/payments/method-types");
+            renderTypeChoices();
+            await loadOrder();
+            await loadMethods();
+            await loadHistory();
+        } catch (e) { App.show("payMsg", "error", e.message); }
+    })();
+</script>
+</body>
+</html>

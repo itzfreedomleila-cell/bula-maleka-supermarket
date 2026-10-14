@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log in or register - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .auth { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; max-width: 900px; margin: 1rem auto; }
+        @media (max-width: 760px) { .auth { grid-template-columns: 1fr; } }
+        .hint { font-size: 0.85rem; color: var(--muted); margin-top: -0.4rem; margin-bottom: 0.7rem; }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <div class="auth">
+        <section class="panel" aria-labelledby="loginHeading">
+            <h2 id="loginHeading">Log in</h2>
+            <form id="loginForm" novalidate>
+                <div class="field"><label for="loginEmail">Email</label>
+                    <input type="email" id="loginEmail" autocomplete="email" required></div>
+                <div class="field"><label for="loginPassword">Password</label>
+                    <input type="password" id="loginPassword" autocomplete="current-password" required></div>
+                <button class="btn wide" type="submit">Log in</button>
+                <div id="loginMsg" class="msg" role="alert"></div>
+            </form>
+        </section>
+
+        <section class="panel" aria-labelledby="registerHeading">
+            <h2 id="registerHeading">New customer? Create an account</h2>
+            <form id="registerForm" novalidate>
+                <div class="field"><label for="regName">Full name</label>
+                    <input type="text" id="regName" autocomplete="name" required></div>
+                <div class="field"><label for="regEmail">Email</label>
+                    <input type="email" id="regEmail" autocomplete="email" required></div>
+                <div class="field"><label for="regPhone">Mobile number (optional)</label>
+                    <input type="tel" id="regPhone" autocomplete="tel" placeholder="912 3456"></div>
+                <div class="field"><label for="regPassword">Password</label>
+                    <input type="password" id="regPassword" autocomplete="new-password" required></div>
+                <p class="hint">At least 8 characters, with a letter and a number.</p>
+                <div class="field"><label for="regConfirm">Confirm password</label>
+                    <input type="password" id="regConfirm" autocomplete="new-password" required></div>
+                <button class="btn wide" type="submit">Create account</button>
+                <div id="registerMsg" class="msg" role="alert"></div>
+            </form>
+        </section>
+    </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+    const next = new URLSearchParams(location.search).get("next");
+
+    /** Only allows going back to a page on this site. */
+    function goOn(user) {
+        const safe = next && /^[a-z]+\.html(\?.*)?$/.test(next) ? next : null;
+        location.href = safe || (user.role === "ADMIN" ? "admin.html" : "cart.html");
+    }
+
+    App.$("loginForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const user = await App.api("POST", "/api/auth/login",
+                { email: App.$("loginEmail").value, password: App.$("loginPassword").value });
+            goOn(user);
+        } catch (err) { App.show("loginMsg", "error", err.message, err.list); }
+    };
+
+    App.$("registerForm").onsubmit = async (e) => {
+        e.preventDefault();
+        try {
+            const user = await App.api("POST", "/api/auth/register", {
+                fullName: App.$("regName").value, email: App.$("regEmail").value, phone: App.$("regPhone").value,
+                password: App.$("regPassword").value, confirmPassword: App.$("regConfirm").value
+            });
+            goOn(user);
+        } catch (err) { App.show("registerMsg", "error", err.message, err.list); }
+    };
+
+    (async () => {
+        const user = await App.loadUser();
+        if (user) { goOn(user); return; }
+        App.renderHeader("login");
+    })();
+</script>
+</body>
+</html>

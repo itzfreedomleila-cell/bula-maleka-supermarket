@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shop - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .shop { display: grid; grid-template-columns: 15rem 1fr 22rem; gap: 1.25rem; align-items: start; }
+        @media (max-width: 1150px) { .shop { grid-template-columns: 15rem 1fr; } .cart { grid-column: 1 / -1; } }
+        @media (max-width: 720px) { .shop { grid-template-columns: 1fr; } }
+        .filters .chips { flex-direction: column; align-items: stretch; }
+        .filters .chip { text-align: left; border-radius: 6px; }
+        .results-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.75rem; }
+        .products { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 0.9rem; }
+        .product { background: var(--paper); border-radius: 8px; overflow: hidden; display: flex; flex-direction: column; }
+        .product .photo { border: 0; padding: 0; background: var(--ocean-soft); cursor: zoom-in; }
+        .product img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+        .product .body { padding: 0.65rem 0.8rem 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; flex: 1; }
+        .product .name { font-weight: 700; background: none; border: 0; padding: 0; text-align: left; color: var(--ink); }
+        .product .name:hover { text-decoration: underline; }
+        .product .price { font-weight: 800; font-size: 1.1rem; }
+        .product .buy { display: flex; gap: 0.4rem; align-items: center; margin-top: auto; }
+        .low { color: var(--error); font-weight: 700; }
+        .cart { position: sticky; top: 1rem; }
+        .line { display: grid; grid-template-columns: 3rem 1fr auto; gap: 0.3rem 0.6rem; padding: 0.6rem 0; border-top: 1px dashed var(--line); align-items: center; }
+        .line:first-child { border-top: 0; }
+        .line img { width: 3rem; height: 3rem; object-fit: cover; border-radius: 6px; background: var(--ocean-soft); grid-row: span 2; }
+        .line .sub { text-align: right; font-weight: 700; }
+        .line .stepper { justify-self: start; }
+        .meter { height: 0.5rem; background: var(--ocean-soft); border-radius: 999px; overflow: hidden; margin-top: 0.3rem; }
+        .meter span { display: block; height: 100%; width: 0; background: var(--mango); transition: width 0.3s; }
+        .meter.full span { background: var(--leaf); }
+        @media (prefers-reduced-motion: reduce) { .meter span { transition: none; } }
+        .cart-actions { display: grid; gap: 0.5rem; margin-top: 1rem; }
+        .cart-actions .two { gap: 0.5rem; }
+        dialog { border: 0; border-radius: 10px; padding: 0; max-width: 34rem; width: calc(100% - 2rem); }
+        dialog::backdrop { background: rgba(11, 79, 108, 0.45); }
+        dialog img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; background: var(--ocean-soft); }
+        dialog .body { padding: 1rem 1.25rem 1.25rem; }
+        dialog h2 { margin: 0.2rem 0 0.4rem; }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <div class="shop">
+        <!-- Advanced Search and Filtering -->
+        <aside class="panel filters" aria-labelledby="filterHeading">
+            <h2 id="filterHeading">Find products</h2>
+            <div class="field">
+                <label for="q">Search</label>
+                <input type="search" id="q" placeholder="e.g. coconut cream">
+            </div>
+            <div class="field">
+                <span class="block" style="font-weight:600;font-size:0.9rem">Aisle</span>
+                <div id="categories" class="chips" role="group" aria-label="Aisle"></div>
+            </div>
+            <div class="field">
+                <span class="block" style="font-weight:600;font-size:0.9rem">Price (FJ$)</span>
+                <div class="two">
+                    <input type="number" id="minPrice" min="0" step="0.5" placeholder="Min" aria-label="Minimum price">
+                    <input type="number" id="maxPrice" min="0" step="0.5" placeholder="Max" aria-label="Maximum price">
+                </div>
+            </div>
+            <div class="field">
+                <label style="font-weight:600"><input type="checkbox" id="inStock"> In stock only</label>
+            </div>
+            <div class="field">
+                <label for="sort">Sort by</label>
+                <select id="sort">
+                    <option value="RELEVANCE">Best match</option>
+                    <option value="NAME">Name A to Z</option>
+                    <option value="PRICE_LOW_HIGH">Price: low to high</option>
+                    <option value="PRICE_HIGH_LOW">Price: high to low</option>
+                    <option value="NEWEST">Newest</option>
+                </select>
+            </div>
+            <button type="button" class="link" id="clearFilters">Clear all filters</button>
+            <div id="filterMsg" class="msg" role="alert"></div>
+        </aside>
+
+        <!-- Product List -->
+        <section aria-labelledby="resultsHeading">
+            <div class="results-head">
+                <h2 id="resultsHeading" style="margin:0">All products</h2>
+                <span id="resultCount" class="muted small" aria-live="polite"></span>
+            </div>
+            <div id="products" class="products"><p class="empty">Loading products…</p></div>
+        </section>
+
+        <!-- Shopping Cart -->
+        <aside class="panel cart" aria-labelledby="cartHeading">
+            <h2 id="cartHeading">Your cart <span id="cartStatus" class="pill"></span></h2>
+            <div id="cartBody"></div>
+        </aside>
+    </div>
+</main>
+
+<dialog id="productDialog" aria-labelledby="dlgName">
+    <img id="dlgPhoto" alt="">
+    <div class="body">
+        <span id="dlgCategory" class="pill"></span>
+        <h2 id="dlgName"></h2>
+        <p id="dlgDescription" class="muted"></p>
+        <div class="row"><span class="num" style="font-size:1.4rem;font-weight:800">FJ$<span id="dlgPrice"></span></span>
+            <span id="dlgStock"></span></div>
+        <div class="row" style="justify-content:flex-start;gap:0.6rem">
+            <div class="stepper">
+                <button type="button" aria-label="Fewer" onclick="step('dlgQty',-1)">−</button>
+                <input type="number" id="dlgQty" min="1" value="1" aria-label="Quantity">
+                <button type="button" aria-label="More" onclick="step('dlgQty',1)">+</button>
+            </div>
+            <button type="button" class="btn" id="dlgAdd">Add to cart</button>
+            <button type="button" class="btn outline" onclick="App.$('productDialog').close()">Close</button>
+        </div>
+        <div id="dlgMsg" class="msg" role="status"></div>
+    </div>
+</dialog>
+
+<script src="js/app.js"></script>
+<script>
+    const { $, api, esc, money } = App;
+    const params = new URLSearchParams(location.search);
+    let categories = [];
+    let products = [];
+    let selectedCategory = params.get("category") ? Number(params.get("category")) : null;
+    let dialogProduct = null;
+    let searchTimer = null;
+
+    // ===== Product Categories =====
+    function renderCategories() {
+        const shown = categories.filter((c) => c.productCount > 0);   // hide empty aisles
+const all = [{ id: null, name: "All aisles", productCount: shown.reduce((n, c) => n + c.productCount, 0) }, ...shown];
+        $("categories").innerHTML = all.map((c) =>
+            `<button type="button" class="chip" aria-pressed="${c.id === selectedCategory}" data-id="${c.id ?? ""}">
+                ${esc(c.name)} <span class="small">(${c.productCount})</span></button>`).join("");
+        document.querySelectorAll("#categories .chip").forEach((b) => b.onclick = () => {
+            selectedCategory = b.dataset.id ? Number(b.dataset.id) : null;
+            renderCategories();
+            loadProducts();
+        });
+    }
+
+    // ===== Product List + Advanced Search + Filtering =====
+    async function loadProducts() {
+        const query = new URLSearchParams();
+        if ($("q").value.trim()) query.set("q", $("q").value.trim());
+        if (selectedCategory) query.set("categoryId", selectedCategory);
+        if ($("minPrice").value) query.set("minPrice", $("minPrice").value);
+        if ($("maxPrice").value) query.set("maxPrice", $("maxPrice").value);
+        if ($("inStock").checked) query.set("inStock", "true");
+        query.set("sort", $("sort").value);
+        try {
+            products = await api("GET", "/api/catalog/products?" + query);
+            App.clear("filterMsg");
+            renderProducts();
+        } catch (e) { App.show("filterMsg", "error", e.message, e.list); }
+    }
+
+    function renderProducts() {
+        const cat = categories.find((c) => c.id === selectedCategory);
+        $("resultsHeading").textContent = $("q").value.trim()
+            ? `Results for "${$("q").value.trim()}"` : (cat ? cat.name : "All products");
+        $("resultCount").textContent = `${products.length} product${products.length === 1 ? "" : "s"}`;
+        if (products.length === 0) {
+            $("products").innerHTML = '<p class="empty">No products match. Try another word or clear the filters.</p>';
+            return;
+        }
+        $("products").innerHTML = products.map((p) => `
+            <article class="product">
+                <button type="button" class="photo" onclick="openProduct(${p.id})" aria-label="View ${esc(p.name)}">
+                    <img src="${esc(p.imageUrl || "")}" alt="" loading="lazy">
+                </button>
+                <div class="body">
+                    <span class="muted small">${esc(p.categoryName)}</span>
+                    <button type="button" class="name" onclick="openProduct(${p.id})">${esc(p.name)}</button>
+                    <span class="price num">FJ$${money(p.price)}</span>
+                    <span class="small ${p.stockQuantity <= 5 ? "low" : "muted"}">
+                        ${p.stockQuantity === 0 ? "Sold out" : p.stockQuantity <= 5 ? "Only " + p.stockQuantity + " left" : p.stockQuantity + " in stock"}</span>
+                    <div class="buy">
+                        <div class="stepper">
+                            <button type="button" aria-label="Fewer" onclick="step('q${p.id}',-1)">−</button>
+                            <input type="number" id="q${p.id}" min="1" value="1" aria-label="Quantity of ${esc(p.name)}">
+                            <button type="button" aria-label="More" onclick="step('q${p.id}',1)">+</button>
+                        </div>
+                        <button type="button" class="btn small" onclick="addProduct(${p.id}, 'q${p.id}')" ${p.inStock ? "" : "disabled"}>Add</button>
+                    </div>
+                </div>
+            </article>`).join("");
+    }
+
+    // ===== Product Description, Price and Photo =====
+    async function openProduct(id) {
+        try {
+            const p = await api("GET", "/api/catalog/products/" + id);
+            dialogProduct = p;
+            $("dlgPhoto").src = p.imageUrl || "";
+            $("dlgPhoto").alt = p.name;
+            $("dlgCategory").textContent = p.categoryName;
+            $("dlgName").textContent = p.name;
+            $("dlgDescription").textContent = p.description || "No description yet.";
+            $("dlgPrice").textContent = money(p.price);
+            $("dlgStock").innerHTML = p.inStock ? `<span class="muted">${p.stockQuantity} in stock</span>` : '<span class="low">Sold out</span>';
+            $("dlgQty").value = 1;
+            $("dlgAdd").disabled = !p.inStock;
+            App.clear("dlgMsg");
+            $("productDialog").showModal();
+        } catch (e) { App.show("filterMsg", "error", e.message); }
+    }
+    $("dlgAdd").onclick = () => addProduct(dialogProduct.id, "dlgQty", "dlgMsg");
+
+    function step(id, change) {
+        const input = $(id);
+        input.value = Math.max(1, (parseInt(input.value, 10) || 1) + change);
+    }
+
+    // ===== Shopping Cart (Module 4) =====
+    async function loadCart() {
+        if (!App.user) {
+            $("cartStatus").textContent = "";
+            $("cartBody").innerHTML = `<p class="empty">Log in to start a cart. Your cart is saved to your account.</p>
+                <a class="btn wide" href="login.html?next=cart.html">Log in or register</a>`;
+            return;
+        }
+        try { renderCart(await api("GET", "/api/cart")); }
+        catch (e) { $("cartBody").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+    }
+
+    function renderCart(cart) {
+        $("cartStatus").textContent = cart.status === "SAVED" ? "Saved" : "Active";
+        $("cartStatus").className = App.pillClass(cart.status);
+        const lines = cart.items.length === 0
+            ? '<p class="empty">Your cart is empty. Add products from the aisles.</p>'
+            : cart.items.map((i) => `
+                <div class="line">
+                    <img src="${esc(i.imageUrl || "")}" alt="">
+                    <div><strong>${esc(i.productName)}</strong><br>
+                        <span class="muted small">FJ$${money(i.unitPrice)} each ·
+                        <button type="button" class="link danger" onclick="removeProduct(${i.productId})">Remove</button></span></div>
+                    <div class="sub num">FJ$${money(i.subtotal)}</div>
+                    <div class="stepper" style="grid-column:2">
+                        <button type="button" aria-label="Fewer" onclick="updateQuantity(${i.productId}, ${i.quantity - 1})">−</button>
+                        <input type="number" min="0" value="${i.quantity}" aria-label="Quantity of ${esc(i.productName)}"
+                               onchange="updateQuantity(${i.productId}, this.value)">
+                        <button type="button" aria-label="More" onclick="updateQuantity(${i.productId}, ${i.quantity + 1})">+</button>
+                    </div>
+                </div>`).join("");
+        $("cartBody").innerHTML = `
+            <div>${lines}</div>
+            <div class="small muted" style="margin-top:0.75rem"><span id="minimumText"></span>
+                <div id="meter" class="meter"><span></span></div></div>
+            <div class="row total"><span>Total (${cart.itemCount} items)</span><span class="num">FJ$${money(cart.total)}</span></div>
+            <div class="cart-actions">
+                <button type="button" class="btn wide" id="checkoutBtn">Check out</button>
+                <div class="two">
+                    <button type="button" class="btn outline small" id="saveBtn">Save cart</button>
+                    <button type="button" class="btn outline small" id="restoreBtn">Restore saved cart</button>
+                </div>
+            </div>
+            <div id="cartMsg" class="msg" role="status" aria-live="polite"></div>`;
+        $("checkoutBtn").onclick = validateAndCheckout;
+        $("saveBtn").onclick = saveCart;
+        $("restoreBtn").onclick = restoreCart;
+        refreshMinimum();
+    }
+
+    /** Progress towards the minimum online order (uses Validate Cart for Checkout). */
+    async function refreshMinimum() {
+        try {
+            const r = await api("GET", "/api/cart/validate");
+            const min = Number(r.minimumOrder), total = Number(r.total);
+            $("meter").querySelector("span").style.width = Math.min(100, total / min * 100) + "%";
+            $("meter").classList.toggle("full", total >= min);
+            $("minimumText").textContent = total >= min ? `Minimum order of FJ$${money(min)} reached.`
+                : `Add FJ$${money(min - total)} more to reach the FJ$${money(min)} minimum order.`;
+        } catch (e) { /* not essential */ }
+    }
+
+    async function addProduct(productId, qtyInputId, msgBoxId) {
+        if (!App.user) { location.href = "login.html?next=cart.html"; return; }
+        const quantity = parseInt($(qtyInputId).value, 10);
+        try {
+            renderCart(await api("POST", "/api/cart/items", { productId, quantity }));
+            App.show("cartMsg", "ok", "Added to cart.");
+            if (msgBoxId) App.show(msgBoxId, "ok", "Added to cart.");
+        } catch (e) {
+            App.show(msgBoxId || "cartMsg", "error", e.message, e.list);
+        }
+    }
+
+    async function removeProduct(productId) {
+        try {
+            renderCart(await api("DELETE", "/api/cart/items/" + productId));
+            App.show("cartMsg", "ok", "Removed from cart.");
+        } catch (e) { App.show("cartMsg", "error", e.message); }
+    }
+
+    async function updateQuantity(productId, value) {
+        const quantity = Math.max(0, parseInt(value, 10) || 0);
+        try {
+            renderCart(await api("PUT", "/api/cart/items/" + productId, { quantity }));
+            App.show("cartMsg", "ok", quantity === 0 ? "Removed from cart." : "Quantity updated.");
+        } catch (e) {
+            await loadCart();
+            App.show("cartMsg", "error", e.message);
+        }
+    }
+
+    async function validateAndCheckout() {
+        try {
+            const r = await api("GET", "/api/cart/validate");
+            if (r.valid) location.href = "checkout.html";
+            else App.show("cartMsg", "error", r.errors.length === 1 ? r.errors[0] : "Your cart is not ready for checkout:", r.errors);
+        } catch (e) { App.show("cartMsg", "error", e.message); }
+    }
+
+    async function saveCart() {
+        try {
+            renderCart(await api("POST", "/api/cart/save"));
+            App.show("cartMsg", "ok", "Cart saved. Restore it any time, even after logging out.");
+        } catch (e) { App.show("cartMsg", "error", e.message); }
+    }
+
+    async function restoreCart() {
+        try {
+            renderCart(await api("POST", "/api/cart/restore"));
+            App.show("cartMsg", "ok", "Saved cart restored.");
+        } catch (e) { App.show("cartMsg", "error", e.message); }
+    }
+
+    // ===== Filter events =====
+    $("q").addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(loadProducts, 250); });
+    ["minPrice", "maxPrice", "inStock", "sort"].forEach((id) => $(id).addEventListener("change", loadProducts));
+    $("clearFilters").onclick = () => {
+        $("q").value = ""; $("minPrice").value = ""; $("maxPrice").value = ""; $("inStock").checked = false;
+        $("sort").value = "RELEVANCE"; selectedCategory = null;
+        renderCategories(); loadProducts();
+    };
+
+    (async () => {
+        await App.loadUser();
+        App.renderHeader("shop");
+        if (params.get("q")) $("q").value = params.get("q");
+        try {
+            categories = await api("GET", "/api/catalog/categories");
+            renderCategories();
+        } catch (e) { App.show("filterMsg", "error", e.message); }
+        await loadProducts();
+        await loadCart();
+        if (params.get("product")) openProduct(Number(params.get("product")));
+    })();
+</script>
+</body>
+</html>

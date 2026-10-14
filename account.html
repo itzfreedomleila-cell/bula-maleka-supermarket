@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My account - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .order { border: 1px solid var(--line); border-radius: 8px; padding: 1rem; margin-bottom: 1rem; }
+        .order-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem; align-items: baseline; }
+        .order-head strong { font-size: 1.1rem; }
+        .delivery { background: var(--ocean-soft); border-radius: 8px; padding: 0.75rem 0.9rem; margin-top: 0.75rem; }
+        .delivery .eta { font-size: 1.15rem; font-weight: 800; }
+        .book { border-top: 1px dashed var(--line); margin-top: 0.75rem; padding-top: 0.75rem; }
+        .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); gap: 0.4rem; }
+        .slots .chip { border-radius: 6px; }
+        .danger-zone { border: 2px solid var(--error-soft); }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <div class="grid-2">
+        <div>
+            <section class="panel" aria-labelledby="ordersHeading">
+                <h2 id="ordersHeading">My orders and deliveries</h2>
+                <div id="orders"><p class="empty">Loading…</p></div>
+            </section>
+        </div>
+
+        <aside>
+            <section class="panel" aria-labelledby="profileHeading">
+                <h2 id="profileHeading">My details</h2>
+                <div id="profile"></div>
+            </section>
+
+            <section class="panel danger-zone" aria-labelledby="deleteHeading">
+                <h2 id="deleteHeading">Delete my account</h2>
+                <p class="small muted">This removes your name, email, phone, saved cart and saved payment methods,
+                    and cancels upcoming deliveries. Past orders are kept without your details for the store's records.</p>
+                <form id="deleteForm" novalidate>
+                    <div class="field"><label for="deletePassword">Enter your password to confirm</label>
+                        <input type="password" id="deletePassword" autocomplete="current-password"></div>
+                    <label class="small"><input type="checkbox" id="deleteSure"> I understand this cannot be undone</label>
+                    <button type="submit" class="btn danger wide" style="margin-top:0.6rem">Delete my account</button>
+                    <div id="deleteMsg" class="msg" role="alert"></div>
+                </form>
+            </section>
+        </aside>
+    </div>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+    const { $, api, esc, money } = App;
+    const bookParam = new URLSearchParams(location.search).get("book");
+    let areas = [];
+    let deliveries = [];
+    const chosenSlot = {};   // order number -> slot code
+
+    function todayIso(offsetDays = 0) {
+        const d = new Date();
+        d.setDate(d.getDate() + offsetDays);
+        // Local date (not UTC), because Fiji is 12 hours ahead of UTC.
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    }
+
+    async function load() {
+        const [orders, myDeliveries] = await Promise.all([api("GET", "/api/orders"), api("GET", "/api/delivery/mine")]);
+        deliveries = myDeliveries;
+        if (orders.length === 0) {
+            $("orders").innerHTML = '<p class="empty">You have no orders yet. <a href="cart.html">Start shopping</a></p>';
+            return;
+        }
+        $("orders").innerHTML = orders.map(renderOrder).join("");
+        orders.filter((o) => o.status === "CONFIRMED").forEach((o) => {
+            const dateInput = $("date-" + o.orderNumber);
+            if (dateInput) {
+                dateInput.onchange = () => loadSlots(o.orderNumber);
+                loadSlots(o.orderNumber);
+            }
+        });
+        if (bookParam && $("book-" + bookParam)) {
+            $("book-" + bookParam).open = true;
+            $("book-" + bookParam).scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+    }
+
+    function renderOrder(o) {
+        const mine = deliveries.filter((d) => d.orderNumber === o.orderNumber);
+        const active = mine.find((d) => ["SCHEDULED", "ASSIGNED", "CONFIRMED", "DELIVERED"].includes(d.status));
+        const past = mine.filter((d) => d !== active);
+        return `
+            <article class="order">
+                <div class="order-head">
+                    <strong>${esc(o.orderNumber)}</strong>
+                    <span class="${App.pillClass(o.status)}">${App.label(o.status)}</span>
+                </div>
+                <div class="muted small">${App.when(o.createdAt)} · ${esc(o.paymentMethod)}</div>
+                <div class="small" style="margin-top:0.35rem">${o.items.map((i) => `${i.quantity} × ${esc(i.productName)}`).join(", ")}</div>
+                <div class="row" style="padding-bottom:0"><span>Total paid</span><strong class="num">FJ$${money(o.total)}</strong></div>
+                ${Number(o.refundedAmount) > 0 ? `<div class="small muted">Refunded FJ$${money(o.refundedAmount)}</div>` : ""}
+                <a class="small" href="receipt.html?order=${encodeURIComponent(o.orderNumber)}">View receipt ${esc(o.receiptNumber || "")}</a>
+                ${active ? renderDelivery(active) : ""}
+                ${!active && o.status === "CONFIRMED" ? renderBookingForm(o) : ""}
+                ${past.length ? `<div class="small muted" style="margin-top:0.5rem">Earlier bookings: ${past.map((d) =>
+                    `${App.day(d.date)} ${esc(d.slotLabel)} (${App.label(d.status)}${d.cancelReason ? ": " + esc(d.cancelReason) : ""})`).join("; ")}</div>` : ""}
+                <div id="msg-${esc(o.orderNumber)}" class="msg" role="status"></div>
+            </article>`;
+    }
+
+    /** Shows the booked delivery with its Estimated Delivery Time. */
+    function renderDelivery(d) {
+        const statusText = {
+            SCHEDULED: "Booked. A driver will be assigned soon.",
+            ASSIGNED: "Driver assigned. Waiting for the store to confirm.",
+            CONFIRMED: "Confirmed. Your groceries are on the way at this time.",
+            DELIVERED: "Delivered."
+        }[d.status] || "";
+        return `
+            <div class="delivery">
+                <div class="row" style="padding:0"><strong>Delivery ${App.day(d.date)}, ${esc(d.slotLabel)}</strong>
+                    <span class="${App.pillClass(d.status)}">${App.label(d.status)}</span></div>
+                <div class="small">${esc(d.address)}, ${esc(d.areaName)}</div>
+                ${d.status !== "DELIVERED" ? `<div style="margin-top:0.35rem">Estimated arrival <span class="eta">${App.time(d.estimatedArrival)}</span></div>` : ""}
+                <div class="small muted">${statusText}${d.driverName ? " Driver: " + esc(d.driverName) + (d.routeSequence ? ", stop " + d.routeSequence : "") : ""}</div>
+                ${d.cancellable ? `<button type="button" class="link danger" style="margin-top:0.35rem" onclick="cancelDelivery(${d.id}, '${esc(d.orderNumber)}')">Cancel this delivery</button>` : ""}
+            </div>`;
+    }
+
+    /** Schedule Delivery Order form. */
+    function renderBookingForm(o) {
+        const n = esc(o.orderNumber);
+        return `
+            <details class="book" id="book-${n}">
+                <summary class="btn small" style="display:inline-block">Book delivery</summary>
+                <div style="margin-top:0.75rem">
+                    <div class="two">
+                        <div class="field"><label for="area-${n}">Area</label>
+                            <select id="area-${n}">${areas.map((a) => `<option value="${a.id}">${esc(a.name)}</option>`).join("")}</select></div>
+                        <div class="field"><label for="phone-${n}">Contact phone</label>
+                            <input type="tel" id="phone-${n}" value="${esc(App.user.phone || "")}" placeholder="912 3456"></div>
+                    </div>
+                    <div class="field"><label for="addr-${n}">Street address</label>
+                        <input type="text" id="addr-${n}" placeholder="e.g. 12 Gordon Street, flat 3"></div>
+                    <div class="field"><label for="date-${n}">Date</label>
+                        <input type="date" id="date-${n}" value="${todayIso(1)}" min="${todayIso(0)}" max="${todayIso(14)}" style="max-width:12rem"></div>
+                    <div class="field"><span class="block" style="font-weight:600;font-size:0.9rem">Time slot</span>
+                        <div id="slots-${n}" class="slots"></div></div>
+                    <button type="button" class="btn" onclick="book('${n}')">Book this slot</button>
+                </div>
+            </details>`;
+    }
+
+    async function loadSlots(orderNumber) {
+        const date = $("date-" + orderNumber).value;
+        if (!date) return;
+        const box = $("slots-" + orderNumber);
+        try {
+            const slots = await api("GET", "/api/delivery/slots?date=" + date);
+            if (!slots.some((s) => s.slot === chosenSlot[orderNumber] && s.available)) {
+                const first = slots.find((s) => s.available);
+                chosenSlot[orderNumber] = first ? first.slot : null;
+            }
+            box.innerHTML = slots.map((s) => `
+                <button type="button" class="chip" data-slot="${s.slot}" aria-pressed="${s.slot === chosenSlot[orderNumber]}"
+                        ${s.available ? "" : "disabled"} title="${esc(s.reason || (s.capacity - s.booked) + " places left")}">
+                    ${esc(s.label)}<br><span class="small">${s.available ? (s.capacity - s.booked) + " left" : "Unavailable"}</span>
+                </button>`).join("");
+            box.querySelectorAll(".chip").forEach((b) => b.onclick = () => {
+                chosenSlot[orderNumber] = b.dataset.slot;
+                box.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", x === b));
+            });
+        } catch (e) { box.textContent = e.message; }
+    }
+
+    async function book(orderNumber) {
+        try {
+            await api("POST", "/api/delivery/schedule", {
+                orderNumber, areaId: Number($("area-" + orderNumber).value), address: $("addr-" + orderNumber).value,
+                contactPhone: $("phone-" + orderNumber).value, date: $("date-" + orderNumber).value,
+                slot: chosenSlot[orderNumber] || null
+            });
+            await load();
+            App.show("msg-" + orderNumber, "ok", "Delivery booked. You can see the estimated arrival time above.");
+        } catch (e) { App.show("msg-" + orderNumber, "error", e.message, e.list); }
+    }
+
+    async function cancelDelivery(id, orderNumber) {
+        if (!confirm("Cancel this delivery booking? You can book another slot afterwards.")) return;
+        try {
+            await api("POST", `/api/delivery/${id}/cancel`);
+            await load();
+            App.show("msg-" + orderNumber, "ok", "Delivery cancelled. Book a new slot when you are ready.");
+        } catch (e) { App.show("msg-" + orderNumber, "error", e.message); }
+    }
+
+    // ===== Account Deletion =====
+    $("deleteForm").onsubmit = async (e) => {
+        e.preventDefault();
+        if (!$("deleteSure").checked) { App.show("deleteMsg", "error", "Tick the box to confirm."); return; }
+        try {
+            await api("DELETE", "/api/auth/account", { password: $("deletePassword").value });
+            alert("Your account has been deleted.");
+            location.href = "index.html";
+        } catch (err) { App.show("deleteMsg", "error", err.message); }
+    };
+
+    (async () => {
+        await App.loadUser();
+        if (!App.requireLogin()) return;
+        App.renderHeader("account");
+        const u = App.user;
+        $("profile").innerHTML = `
+            <div class="row"><span class="muted">Name</span><strong>${esc(u.fullName)}</strong></div>
+            <div class="row"><span class="muted">Email</span><span>${esc(u.email)}</span></div>
+            <div class="row"><span class="muted">Phone</span><span>${esc(u.phone || "Not given")}</span></div>
+            <div class="row"><span class="muted">Account type</span><span>${u.role === "ADMIN" ? "Store staff" : "Customer"}</span></div>`;
+        try {
+            areas = await api("GET", "/api/delivery/areas");
+            await load();
+        } catch (e) { $("orders").innerHTML = `<p class="empty">${esc(e.message)}</p>`; }
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt - Bula Maleka Supermarket</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/app.css">
+    <style>
+        .receipt { max-width: 30rem; margin: 1rem auto; background: var(--paper); padding: 1.5rem; border-radius: 8px; font-variant-numeric: tabular-nums; }
+        .receipt h1 { font-size: 1.4rem; margin: 0; text-align: center; }
+        .center { text-align: center; }
+        .rule { border: 0; border-top: 2px dashed var(--line); margin: 0.9rem 0; }
+        .tools { max-width: 30rem; margin: 0 auto; display: flex; gap: 0.5rem; justify-content: center; }
+        @media print {
+            .site-header, .tools { display: none; }
+            body { background: #fff; }
+            .receipt { margin: 0 auto; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+<header class="site-header"></header>
+<main class="wrap">
+    <div class="tools">
+        <button type="button" class="btn" onclick="window.print()">Print or save as PDF</button>
+        <a class="btn outline" href="account.html">Back to my orders</a>
+    </div>
+    <article class="receipt" id="receipt" aria-live="polite">Loading receipt…</article>
+</main>
+
+<script src="js/app.js"></script>
+<script>
+    const { $, api, esc, money } = App;
+    (async () => {
+        await App.loadUser();
+        if (!App.requireLogin()) return;
+        App.renderHeader("account");
+        const order = new URLSearchParams(location.search).get("order");
+        try {
+            const r = await api("GET", `/api/orders/${encodeURIComponent(order)}/receipt`);
+            document.title = r.receiptNumber + " - Receipt";
+            $("receipt").innerHTML = `
+                <h1>${esc(r.storeName)}</h1>
+                <div class="center muted small">${esc(r.storeAddress)}${r.storePhone ? " · Phone " + esc(r.storePhone) : ""}</div>
+                <hr class="rule">
+                <div class="row"><span>Receipt</span><strong>${esc(r.receiptNumber)}</strong></div>
+                <div class="row"><span>Order</span><span>${esc(r.orderNumber)}</span></div>
+                <div class="row"><span>Date</span><span>${App.when(r.issuedAt)}</span></div>
+                <div class="row"><span>Customer</span><span>${esc(r.customerName)}</span></div>
+                <hr class="rule">
+                ${r.items.map((i) => `
+                    <div class="row"><span>${esc(i.productName)}<br><span class="muted small">${i.quantity} × FJ$${money(i.unitPrice)}</span></span>
+                        <span>FJ$${money(i.subtotal)}</span></div>`).join("")}
+                <hr class="rule">
+                <div class="row"><span>Subtotal</span><span>FJ$${money(r.subtotal)}</span></div>
+                <div class="row"><span>Delivery</span><span>${Number(r.deliveryFee) === 0 ? "Free" : "FJ$" + money(r.deliveryFee)}</span></div>
+                ${Number(r.surcharge) > 0 ? `<div class="row"><span>Card fee</span><span>FJ$${money(r.surcharge)}</span></div>` : ""}
+                <div class="row total"><span>Total paid</span><span>FJ$${money(r.total)}</span></div>
+                ${Number(r.refundedAmount) > 0 ? `<div class="row"><span>Refunded</span><span>−FJ$${money(r.refundedAmount)}</span></div>` : ""}
+                <div class="row"><span>Paid by</span><span>${esc(r.paymentMethod)}</span></div>
+                <div class="row"><span>Payment ref</span><span class="small">${esc(r.paymentReference)}</span></div>
+                <hr class="rule">
+                <p class="center">${esc(r.note)}</p>
+                <p class="center muted small">Prices in Fiji dollars. Coursework demonstration; no real payment was taken.</p>`;
+        } catch (e) {
+            $("receipt").innerHTML = `<p class="empty">${esc(e.message)}</p>`;
+        }
+    })();
+</script>
+</body>
+</html>
