@@ -1,0 +1,16 @@
+# Build output
+target/
+# Local H2 database files and uploaded product photos created at runtime
+data/
+uploads/
+*.mv.db
+*.trace.db
+# IDE files
+nbproject/private/
+nbactions.xml
+.idea/
+*.iml
+.vscode/
+# OS files
+.DS_Store
+Thumbs.db
